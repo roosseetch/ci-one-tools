@@ -65,8 +65,9 @@ jobs:
       group: security-issue-${{ github.repository }}-${{ inputs.issue-title }}
       cancel-in-progress: false
     env:
-      # The current audit tag; bin/check-image-tags keeps them in step.
-      AUDIT_IMAGE: ghcr.io/roosseetch/ci-one-tools/audit:1.0.0
+      # The current audit tag, pinned by the digest images.yml published it
+      # with (its run summary); bin/check-image-tags keeps the tag in step.
+      AUDIT_IMAGE: ghcr.io/roosseetch/ci-one-tools/audit:1.0.0@sha256:95e82062db74d0925726a8367a28147fe85cc1d56eb84372ecbd7ffae9c2c1db
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

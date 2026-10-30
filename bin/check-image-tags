@@ -59,7 +59,11 @@ if [[ "$parent" != "$node" ]]; then
   rc=1
 fi
 audit="$(bin/image-tags audit)"
-used="$(sed -n 's|^ *AUDIT_IMAGE: .*/audit:\(.*\)$|\1|p' .github/workflows/security.yml)"
+used="$(sed -n 's|^ *AUDIT_IMAGE: .*/audit:\([^@]*\).*$|\1|p' .github/workflows/security.yml)"
+if ! grep -qE '^ *AUDIT_IMAGE: .*/audit:[^@]+@sha256:[0-9a-f]{64}$' .github/workflows/security.yml; then
+  echo "check-image-tags: .github/workflows/security.yml must pin AUDIT_IMAGE by digest (tag@sha256:...)" >&2
+  rc=1
+fi
 if [[ "$used" != "$audit" ]]; then
   echo "check-image-tags: .github/workflows/security.yml runs audit:$used, not the current audit:$audit" >&2
   rc=1
