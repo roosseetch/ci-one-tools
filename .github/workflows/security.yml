@@ -1,0 +1,133 @@
+# Reusable: known vulnerabilities in a repository's lockfiles (cargo-deny,
+# bun audit) and in the images it runs (Trivy), with one tracking issue in
+# the calling repository. Lockfile findings and failed checks fail the run;
+# image findings only report, because upstream images gain CRITICAL findings
+# without any change of the caller's.
+#
+# Call it from a workflow in the repository to check:
+#
+#   on:
+#     schedule: [{ cron: "17 5 * * *" }]
+#     workflow_dispatch:
+#   jobs:
+#     security:
+#       permissions: { contents: read, issues: write }
+#       uses: roosseetch/ci-one-tools/.github/workflows/security.yml@<commit sha>
+#       with:
+#         audit-args: --deny-config deny.toml .
+#         images-command: ./scripts/list-images
+#
+# The issue is updated while findings remain and closed by a clean run; on a
+# pull_request event the run only reports.
+name: Security
+
+on:
+  workflow_call:
+    inputs:
+      lockfiles:
+        description: Check the lockfiles; false scans images only
+        type: boolean
+        default: true
+      audit-args:
+        description: Arguments of lockfile-audit (options, then directories)
+        type: string
+        default: "."
+      images:
+        description: Images to scan, one per line
+        type: string
+        default: ""
+      images-command:
+        description: A command in the repository that prints more images to scan, one per line
+        type: string
+        default: ""
+      checks:
+        description: A command in the repository whose failure fails the run, reported with the lockfiles
+        type: string
+        default: ""
+      issue-title:
+        description: Title of the tracking issue
+        type: string
+        default: Security scan findings
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+    env:
+      # The current audit tag; bin/check-image-tags keeps them in step.
+      AUDIT_IMAGE: ghcr.io/roosseetch/ci-one-tools/audit:1.0.0
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Lockfiles, checks and images
+        id: scan
+        env:
+          LOCKFILES: ${{ inputs.lockfiles }}
+          AUDIT_ARGS: ${{ inputs.audit-args }}
+          IMAGES: ${{ inputs.images }}
+          IMAGES_COMMAND: ${{ inputs.images-command }}
+          CHECKS: ${{ inputs.checks }}
+        run: |
+          podman pull -q "$AUDIT_IMAGE" >/dev/null
+          run() { podman run --rm -i --security-opt label=disable -v cargo-home:/cargo -e CARGO_HOME=/cargo \
+            -v trivy-cache:/root/.cache/trivy -v "$PWD:/work" -w /work "$AUDIT_IMAGE" "$@"; }
+          rc=0
+          # Word splitting is intended: AUDIT_ARGS is an argument list.
+          # shellcheck disable=SC2086
+          if [ "$LOCKFILES" = true ]; then run lockfile-audit $AUDIT_ARGS > audit.log 2>&1 || rc=1; fi
+          : > checks.log
+          if [ -n "$CHECKS" ]; then bash -c "$CHECKS" > checks.log 2>&1 || rc=1; fi
+          { printf '%s\n' "$IMAGES"; if [ -n "$IMAGES_COMMAND" ]; then bash -c "$IMAGES_COMMAND"; fi; } > images.txt || rc=1
+          img=0
+          if grep -qv '^[[:space:]]*$' images.txt; then
+            run scan-images < images.txt > images.md || img=1
+          else
+            echo "No images to scan." > images.md
+          fi
+          {
+            if [ "$LOCKFILES" = true ]; then
+              echo "## Lockfiles"
+              echo '```'
+              sed 's/\x1b\[[0-9;]*m//g' audit.log | grep -vE '^\s*$' | tail -n 150
+              echo '```'
+            fi
+            if [ -n "$CHECKS" ]; then
+              echo "## Checks"
+              if [ -s checks.log ]; then echo '```'; tail -n 100 checks.log; echo '```'; else echo "All passed."; fi
+            fi
+            echo
+            echo "## Images (HIGH and CRITICAL with a fixed version)"
+            echo
+            cat images.md
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          echo "failed=$rc" >> "$GITHUB_OUTPUT"
+          echo "findings=$((rc | img))" >> "$GITHUB_OUTPUT"
+
+      - name: Update the tracking issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINDINGS: ${{ steps.scan.outputs.findings }}
+          TITLE: ${{ inputs.issue-title }}
+        run: |
+          n=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number -q '.[0].number')
+          # GitHub caps an issue body at 65,536 characters; the run summary
+          # keeps the whole report.
+          body="$(printf 'Run: %s/%s/actions/runs/%s\n\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"; head -c 60000 report.md)"
+          [ "$(wc -c < report.md)" -le 60000 ] || body="$body"$'\n\n_Truncated; the full report is in the run summary._'
+          if [ "$FINDINGS" = 1 ]; then
+            if [ -n "$n" ]; then gh issue edit "$n" --body "$body"; else gh issue create --title "$TITLE" --body "$body"; fi
+          elif [ -n "$n" ]; then
+            gh issue close "$n" --comment "Clean run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+
+      - name: Fail on findings
+        if: steps.scan.outputs.failed == '1'
+        run: exit 1

@@ -1,0 +1,5 @@
+[advisories]
+db-path = "/cargo/advisory-dbs"
+ignore = [
+  { id = "RUSTSEC-2021-0003", reason = "test fixture: the advisory is accepted on purpose" },
+]

@@ -1,0 +1,16 @@
+# Node and Bun: Node is the runtime, Bun the package manager.
+#
+# Versions, pinned together:
+# - Node 26 (LTS) on Alpine, pinned by digest.
+# - Bun 1.4.3, installed with npm from the official package.
+# Bump them together, and add a new tag for this image to images/tags.
+FROM docker.io/library/node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS base
+# Alpine's security fixes, whether or not upstream has rebuilt the pinned
+# base yet.
+RUN apk upgrade --no-cache
+
+FROM base
+
+RUN npm install -g --no-fund --no-audit bun@1.4.3 \
+ && bun --version \
+ && npm cache clean --force

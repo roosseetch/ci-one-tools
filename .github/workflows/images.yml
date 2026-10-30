@@ -1,0 +1,59 @@
+# Publishes each image under its current tag (bin/image-tags) to GHCR, once:
+# a tag that is already published is never pushed again, so a tag always
+# means the same image. Runs when main changes an image, and by hand.
+name: Images
+
+on:
+  push:
+    branches: [main]
+    paths: ["images/**", "bin/**", ".github/workflows/images.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - run: bin/check-image-tags
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ github.token }}
+        run: printf '%s' "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push new tags
+        run: |
+          echo "| Image | Digest |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          while read -r name tag; do
+            ref="$IMAGE_PREFIX/$name:$tag"
+            if skopeo inspect --raw "docker://$ref" >/dev/null 2>&1; then
+              echo "$ref is published already"
+              echo "| \`$ref\` | published before |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            # The sbf image needs more disk than the runner has free while
+            # its unused SDKs are installed.
+            if [ "$name" = sbf ]; then
+              sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            fi
+            bin/build-image "$name"
+            podman push --digestfile digest "$ref"
+            echo "| \`$ref\` | \`$(cat digest)\` |" >> "$GITHUB_STEP_SUMMARY"
+            # Free the disk for the next build; web-test builds on node.
+            [ "$name" = node ] || podman rmi -f "$ref" >/dev/null
+          done < <(bin/image-tags)

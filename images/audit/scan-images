@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Known vulnerabilities in container images, scanned by Trivy straight from
+# their registries: one Markdown table row per image with its HIGH and
+# CRITICAL findings that have a fixed version.
+#
+#   scan-images IMAGE...       images as arguments
+#   scan-images < list         or one per line on stdin (# comments allowed)
+#
+# Images carry many fixed-upstream HIGH findings between their own rebuilds,
+# so the table is a report, not a gate: the exit code is 1 only for a
+# CRITICAL finding that has a fix (a newer digest or tag to take) or an
+# image that could not be scanned (a registry rate limit, the network); its
+# row says "failed" and the other rows still run.
+#
+# Mount a volume at /root/.cache/trivy to keep Trivy's database between runs.
+set -euo pipefail
+
+images=("$@")
+if ((${#images[@]} == 0)); then
+  mapfile -t images < <(sed -e 's/#.*//' -e 's/[[:space:]]//g' | grep -v '^$' | sort -u)
+fi
+((${#images[@]})) || { echo "scan-images: no images given" >&2; exit 2; }
+
+report="$(mktemp)"
+trap 'rm -f "$report"' EXIT
+rc=0
+echo "| Image | CRITICAL | HIGH |"
+echo "|---|---:|---:|"
+for image in "${images[@]}"; do
+  echo "scan-images: $image" >&2
+  if ! trivy image --quiet --scanners vuln --severity HIGH,CRITICAL \
+    --ignore-unfixed --format json "$image" > "$report"; then
+    echo "| \`$image\` | failed | failed |"
+    rc=1
+    continue
+  fi
+  # One severity field per finding.
+  critical=$(grep -c '"Severity": "CRITICAL"' "$report" || :)
+  high=$(grep -c '"Severity": "HIGH"' "$report" || :)
+  echo "| \`$image\` | $critical | $high |"
+  ((critical == 0)) || rc=1
+done
+exit "$rc"

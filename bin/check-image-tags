@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Images are pulled by tag, so a change under images/NAME must come with a
+# new tag, or everyone keeps the old image. images/tags lists every tag with
+# the hash of the directory it was built from (bin/image-tags --hash). This
+# fails when an image's directory has no line under its current tag, a tag
+# names two hashes, web-test does not build on the current node tag, or the
+# reusable security workflow does not run the current audit tag.
+#
+#   bin/check-image-tags
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+rc=0
+while read -r name tag; do
+  sha="$(bin/image-tags --hash "$name")"
+  if [[ -z "$tag" ]]; then
+    echo "check-image-tags: images/tags has no line for $name; append \"$name <tag> $sha\"" >&2
+    rc=1
+    continue
+  fi
+  recorded="$(awk -v i="$name" -v t="$tag" '$1 == i && $2 == t { print $3 }' images/tags | tail -n1)"
+  if [[ "$recorded" != "$sha" ]]; then
+    echo "check-image-tags: images/$name changed since $name:$tag; append \"$name <new tag> $sha\" to images/tags" >&2
+    rc=1
+  fi
+done < <(bin/image-tags)
+
+# A tag names one directory state, ever.
+if dup="$(awk '!/^#/ && NF { k = $1 ":" $2; if (k in seen && seen[k] != $3) print k; seen[k] = $3 }' images/tags)" && [[ -n "$dup" ]]; then
+  echo "check-image-tags: these tags name more than one hash in images/tags: $dup" >&2
+  rc=1
+fi
+
+node="$(bin/image-tags node)"
+parent="$(sed -n 's|^ARG NODE_IMAGE=.*/node:\(.*\)$|\1|p' images/web-test/Containerfile)"
+if [[ "$parent" != "$node" ]]; then
+  echo "check-image-tags: images/web-test builds on node:$parent, not the current node:$node" >&2
+  rc=1
+fi
+audit="$(bin/image-tags audit)"
+used="$(sed -n 's|^ *AUDIT_IMAGE: .*/audit:\(.*\)$|\1|p' .github/workflows/security.yml)"
+if [[ "$used" != "$audit" ]]; then
+  echo "check-image-tags: .github/workflows/security.yml runs audit:$used, not the current audit:$audit" >&2
+  rc=1
+fi
+exit "$rc"

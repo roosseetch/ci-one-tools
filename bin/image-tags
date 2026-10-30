@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# The current tag of each image: the last line for it in images/tags.
+#
+#   bin/image-tags              "name tag" per image, in build order
+#   bin/image-tags NAME         the tag of one image
+#   bin/image-tags --hash NAME  the hash of images/NAME as images/tags records it
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Build order: web-test builds on node.
+ORDER=(node sbf audit web-test)
+
+# hash <name>: SHA-256 over every file in images/<name>, paths included.
+hash() {
+  (cd "images/$1" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) | sha256sum | cut -c1-64
+}
+
+current() {
+  awk -v i="$1" '!/^#/ && $1 == i { t = $2 } END { print t }' images/tags
+}
+
+case "${1:-}" in
+  --hash) hash "$2" ;;
+  "") for name in "${ORDER[@]}"; do echo "$name $(current "$name")"; done ;;
+  *) current "$1" ;;
+esac

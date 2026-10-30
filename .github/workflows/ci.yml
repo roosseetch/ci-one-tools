@@ -1,0 +1,50 @@
+# Pull requests: tags match the image directories, the scripts parse, and
+# every image whose directory changed builds; the audit image also runs its
+# own checks against this repository's fixtures. Publishing is images.yml,
+# after the merge.
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - run: bin/check-image-tags
+
+      - name: Scripts parse
+        run: for f in bin/* images/audit/lockfile-audit images/audit/scan-images; do bash -n "$f"; done
+
+      - name: Build changed images
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "${BASE:-HEAD~1}" HEAD -- images | cut -d/ -f2 | sort -u)
+          echo "changed: ${changed:-none}"
+          while read -r name tag; do
+            grep -qx "$name" <<< "$changed" || continue
+            if [ "$name" = sbf ]; then
+              sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            fi
+            bin/build-image "$name"
+          done < <(bin/image-tags)
+
+      - name: Audit image checks
+        run: |
+          ref="ghcr.io/${GITHUB_REPOSITORY}/audit:$(bin/image-tags audit)"
+          podman image exists "$ref" || podman pull -q "$ref"
+          tests/audit.sh "$ref"

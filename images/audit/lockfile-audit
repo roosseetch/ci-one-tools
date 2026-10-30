@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Known vulnerabilities in the lockfiles under the given directories:
+# cargo-deny advisories where a Cargo.lock is, `bun audit` where a bun.lock
+# is. Every directory is checked; the exit code is 1 if any check failed.
+#
+#   lockfile-audit [--deny-config FILE] [--bun-ignore GHSA-ID]... DIR...
+#
+#   --deny-config  cargo-deny configuration (its [advisories] table: accepted
+#                  advisories and the database path); default: cargo-deny's
+#                  own lookup in each directory
+#   --bun-ignore   an advisory `bun audit` may report without failing; repeat
+#                  for more
+#
+# Runs in the audit image with the repository mounted at the working
+# directory. cargo-deny needs the crate index: mount a cargo home (CARGO_HOME)
+# that already holds it to skip the download.
+set -euo pipefail
+
+config=() ignore=() dirs=()
+while (($#)); do
+  case "$1" in
+    --deny-config) config=(--config "$2"); shift 2 ;;
+    --bun-ignore) ignore+=("--ignore=$2"); shift 2 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    -*) echo "lockfile-audit: unknown option $1" >&2; exit 2 ;;
+    *) dirs+=("$1"); shift ;;
+  esac
+done
+((${#dirs[@]})) || dirs=(.)
+
+rc=0 checked=0
+for dir in "${dirs[@]}"; do
+  if [[ -f "$dir/Cargo.lock" ]]; then
+    echo "lockfile-audit: cargo-deny in $dir" >&2
+    cargo-deny --manifest-path "$dir/Cargo.toml" --locked "${config[@]}" check advisories || rc=1
+    checked=1
+  fi
+  if [[ -f "$dir/bun.lock" ]]; then
+    echo "lockfile-audit: bun audit in $dir" >&2
+    (cd "$dir" && bun audit --audit-level=moderate "${ignore[@]}") || rc=1
+    checked=1
+  fi
+done
+if ((!checked)); then
+  echo "lockfile-audit: no Cargo.lock or bun.lock in ${dirs[*]}" >&2
+  exit 2
+fi
+exit "$rc"
