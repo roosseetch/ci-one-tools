@@ -78,9 +78,11 @@ jobs:
       checks: ./scripts/check-something       # optional: fails the run like a lockfile finding
 ```
 
-Lockfile findings and failed checks fail the run. Image findings only show
-up in the report and the issue, because upstream images gain findings
-without any change of yours.
+Lockfile findings, failed checks and images that could not be scanned
+fail the run. An image that fails to scan (a registry rate limit, the
+network) is retried twice before that. Image findings only show up in the
+report and the issue, because upstream images gain findings without any
+change of yours.
 
 ## This repository
 
