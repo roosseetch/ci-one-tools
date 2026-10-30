@@ -41,10 +41,20 @@ jobs:
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           while read -r name tag; do
             ref="$IMAGE_PREFIX/$name:$tag"
-            if skopeo inspect --raw "docker://$ref" >/dev/null 2>&1; then
+            if skopeo inspect --raw "docker://$ref" >/dev/null 2> inspect.err; then
               echo "$ref is published already"
               echo "| \`$ref\` | published before |" >> "$GITHUB_STEP_SUMMARY"
               continue
+            fi
+            # Only a tag the registry says it lacks is built; any other error
+            # (the network, a rate limit) stops here rather than overwrite it.
+            # A package GHCR has never seen answers 403 (denied): a token that
+            # can push can also read, so for a published tag that cannot
+            # happen.
+            if ! grep -qiE 'manifest unknown|name unknown|not found|404|denied|403' inspect.err; then
+              cat inspect.err >&2
+              echo "::error::could not tell whether $ref is published"
+              exit 1
             fi
             # The sbf image needs more disk than the runner has free while
             # its unused SDKs are installed.
