@@ -1,8 +1,9 @@
 # Reusable: known vulnerabilities in a repository's lockfiles (cargo-deny,
 # bun audit) and in the images it runs (Trivy), with one tracking issue in
-# the calling repository. Lockfile findings and failed checks fail the run;
-# image findings only report, because upstream images gain CRITICAL findings
-# without any change of the caller's.
+# the calling repository. Lockfile findings, failed checks and images that
+# could not be scanned (after two retries) fail the run; image findings only
+# report, because upstream images gain CRITICAL findings without any change
+# of the caller's.
 #
 # Call it from a workflow in the repository to check:
 #
@@ -91,9 +92,36 @@ jobs:
           # errexit and pipefail, so a failure inside a pipeline is not lost.
           if [ -n "$CHECKS" ]; then bash -e -o pipefail -c "$CHECKS" > checks.log 2>&1 || rc=1; fi
           { printf '%s\n' "$IMAGES"; if [ -n "$IMAGES_COMMAND" ]; then bash -e -o pipefail -c "$IMAGES_COMMAND"; fi; } > images.txt || rc=1
-          img=0
+          img=0 incomplete=""
+          # The backticks in the patterns below are literal (Markdown code).
+          # shellcheck disable=SC2016
           if grep -qv '^[[:space:]]*$' images.txt; then
-            run scan-images < images.txt > images.md || img=1
+            run scan-images < images.txt > images.md || :
+            # A "failed" row is an image Trivy could not scan (a registry
+            # rate limit, the network), not a finding: retry those images
+            # twice, then fail the run, so a scan that never ran is not green.
+            for wait in 15 45; do
+              retry=$(sed -n 's/^| `\(.*\)` | failed | failed |$/\1/p' images.md)
+              [ -n "$retry" ] || break
+              sleep "$wait"
+              while read -r ref; do
+                row=$(run scan-images "$ref" < /dev/null 2>/dev/null | grep '^| `' || :)
+                [ -n "$row" ] || continue
+                awk -v key="| \`$ref\` |" -v row="$row" 'index($0, key) == 1 { $0 = row } { print }' \
+                  images.md > images.tmp && mv images.tmp images.md
+              done <<< "$retry"
+            done
+            want=$(sed -e 's/#.*//' -e 's/[[:space:]]//g' images.txt | grep -v '^$' | sort -u | wc -l)
+            failed=$(grep -c '^| `.*` | failed |' images.md || :)
+            scanned=$(grep -c '^| `' images.md || :)
+            if [ "$failed" -gt 0 ]; then
+              incomplete="$failed of $want images could not be scanned after three attempts."
+            elif [ "$scanned" -ne "$want" ]; then
+              incomplete="The report has $scanned rows for $want images."
+            fi
+            [ -z "$incomplete" ] || rc=1
+            # A fixable CRITICAL finding keeps the issue open; it doesn't fail the run.
+            img=$(awk -F'|' '$2 ~ /`/ && $3 + 0 > 0 { f = 1 } END { print f + 0 }' images.md)
           else
             echo "No images to scan." > images.md
           fi
@@ -111,6 +139,7 @@ jobs:
             echo
             echo "## Images (HIGH and CRITICAL with a fixed version)"
             echo
+            if [ -n "$incomplete" ]; then echo "**Scan incomplete:** $incomplete"; echo; fi
             cat images.md
           } > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
