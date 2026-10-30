@@ -1,0 +1,20 @@
+# Rust for services and libraries: the sbf image's toolchain without the
+# Solana tools (no Agave, platform-tools, Anchor or Trident), so it pulls in
+# a fraction of the time. Same Rust release as images/sbf, so a target/
+# built in one is reused by the other; bin/check-image-tags keeps them in
+# step.
+#
+# Versions, pinned together:
+# - Rust 1.97.1 on slim Debian, pinned by digest, with gcc and the C
+#   library headers for build scripts.
+# - pkg-config, rustfmt and clippy.
+# Bump them together, and add a new tag for this image to images/tags.
+FROM docker.io/library/rust:1.97.1-slim-trixie@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c
+# Debian's security fixes, whether or not upstream has rebuilt the pinned
+# base yet.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends pkg-config \
+ && rm -rf /var/lib/apt/lists/* \
+ && rustup component add rustfmt clippy
+WORKDIR /work

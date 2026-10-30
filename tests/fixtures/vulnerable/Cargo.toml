@@ -1,0 +1,9 @@
+[package]
+name = "vulnerable"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# smallvec 1.6.0 has RUSTSEC-2021-0003 (fixed in 1.6.1).
+[dependencies]
+smallvec = "=1.6.0"

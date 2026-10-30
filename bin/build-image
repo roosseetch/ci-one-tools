@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Builds one image under its current tag, with the name it is published
+# under, so builds that start FROM it (web-test on node) find it locally.
+#
+#   bin/build-image NAME        prints the image reference
+#
+# Environment:
+#   IMAGE_PREFIX  registry path (default: ghcr.io/roosseetch/ci-one-tools)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/roosseetch/ci-one-tools}"
+name="$1"
+tag="$(bin/image-tags "$name")"
+[[ -n "$tag" ]] || { echo "build-image: no tag for $name in images/tags" >&2; exit 1; }
+ref="$IMAGE_PREFIX/$name:$tag"
+args=()
+[[ "$name" != web-test ]] || args+=(--build-arg "NODE_IMAGE=$IMAGE_PREFIX/node:$(bin/image-tags node)")
+podman build "${args[@]}" \
+  --label org.opencontainers.image.source=https://github.com/roosseetch/ci-one-tools \
+  --label org.opencontainers.image.licenses=Apache-2.0 \
+  -t "$ref" "images/$name" >&2
+echo "$ref"

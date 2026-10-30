@@ -1,0 +1,47 @@
+# Vulnerability checks in one image:
+# - lockfile-audit: cargo-deny advisories for Cargo.lock (RustSec) and
+#   `bun audit` for bun.lock (npm advisories);
+# - scan-images: Trivy over container images, as a Markdown table.
+# Small on purpose: a scheduled workflow pulls it in seconds.
+#
+# Versions, pinned together:
+# - Rust 1.97.1 (cargo metadata for cargo-deny), slim Debian.
+# - git, which cargo-deny uses to fetch the advisory database.
+# - cargo-deny 0.20.2, Bun 1.4.3 and Trivy 0.76.1, each from its release
+#   archive, pinned by the SHA-256 the release publishes.
+# Bump them together, and add a new tag for this image to images/tags.
+# Both stages start from the same pinned base.
+FROM docker.io/library/rust:1.97.1-slim-trixie@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c AS fetch
+ARG DENY=0.20.2
+ARG DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+ARG BUN=1.4.3
+ARG BUN_SHA256=3e730528d89775f03f87f05c06787c4df4099d0a37f3f252e7b829cb23816e18
+ARG TRIVY=0.76.1
+ARG TRIVY_SHA256=c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /fetch
+RUN curl -fsSL -o deny.tar.gz \
+      "https://github.com/EmbarkStudios/cargo-deny/releases/download/${DENY}/cargo-deny-${DENY}-x86_64-unknown-linux-musl.tar.gz" \
+ && echo "${DENY_SHA256}  deny.tar.gz" | sha256sum -c - \
+ && tar xzf deny.tar.gz --strip-components=1 "cargo-deny-${DENY}-x86_64-unknown-linux-musl/cargo-deny" \
+ && curl -fsSL -o bun.zip "https://github.com/oven-sh/bun/releases/download/bun-v${BUN}/bun-linux-x64.zip" \
+ && echo "${BUN_SHA256}  bun.zip" | sha256sum -c - \
+ && unzip -j bun.zip bun-linux-x64/bun \
+ && curl -fsSL -o trivy.tar.gz \
+      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY}/trivy_${TRIVY}_Linux-64bit.tar.gz" \
+ && echo "${TRIVY_SHA256}  trivy.tar.gz" | sha256sum -c - \
+ && tar xzf trivy.tar.gz trivy
+
+FROM docker.io/library/rust:1.97.1-slim-trixie@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c
+# Debian's security fixes, whether or not upstream has rebuilt the pinned
+# base yet.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends ca-certificates git \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=fetch /fetch/cargo-deny /fetch/bun /fetch/trivy /usr/local/bin/
+COPY lockfile-audit scan-images /usr/local/bin/
+RUN cargo-deny --version && bun --version && trivy --version
+WORKDIR /work

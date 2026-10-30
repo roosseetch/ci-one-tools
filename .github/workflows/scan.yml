@@ -1,0 +1,23 @@
+# Daily Trivy scan of the published images under their current tags, with
+# one tracking issue. A fix is a new tag (a rebuild takes the distribution's
+# fixes) or a newer pinned base.
+name: Image scan
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/security.yml
+    with:
+      lockfiles: false
+      images-command: bin/image-tags | while read -r name tag; do echo "ghcr.io/${GITHUB_REPOSITORY}/$name:$tag"; done
+      issue-title: Image scan findings

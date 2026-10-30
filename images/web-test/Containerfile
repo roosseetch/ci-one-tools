@@ -1,0 +1,9 @@
+# Browser tests: the node image plus Chromium for Playwright. Node stays the
+# runtime, Bun installs only.
+#
+# Follows the node image's current tag; scripts/check-image-tags fails when
+# it doesn't.
+ARG NODE_IMAGE=ghcr.io/roosseetch/ci-one-tools/node:26.13.0-1
+FROM ${NODE_IMAGE}
+RUN apk add --no-cache chromium
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser

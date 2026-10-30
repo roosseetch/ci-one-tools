@@ -1,0 +1,50 @@
+# Build and test image for Solana programs: compile to SBF, run host-side
+# tests (LiteSVM), fuzz (Trident), generate IDLs (Anchor), format and lint.
+#
+# Versions, pinned together:
+# - Rust 1.97.1: the host toolchain Agave 4.3.0 is built with (its
+#   rust-toolchain.toml).
+# - Agave 4.3.0: cargo-build-sbf, solana and solana-keygen from Anza's
+#   release archive, pinned by SHA-256 (Anza publishes no checksum; this is
+#   the hash it had when first fetched).
+# - platform-tools v1.57: the default of cargo-build-sbf 4.3.0, installed at
+#   image build time so builds work offline.
+# - Anchor CLI 1.2.1.
+# - Trident CLI 0.12.0.
+# - rustfmt and clippy of the Rust toolchain.
+# Bump them together, and add a new tag for this image to images/tags.
+FROM docker.io/library/rust:1.97.1-trixie@sha256:b1b3c9c0d921d7fa0a6d1f9ec7e4eab87f8c8ec97644c3d791450f131dec813f AS base
+# Debian's security fixes, whether or not upstream has rebuilt the pinned
+# base yet.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
+FROM base
+
+ARG AGAVE=v4.3.0
+ARG AGAVE_SHA256=c97289a8abb1d0efb497d8b5cb285baabd9b7f8ea6647f5d145c5dc8ff3611e8
+ARG PLATFORM_TOOLS=v1.57
+ARG ANCHOR=1.2.1
+ARG TRIDENT=0.12.0
+
+RUN curl -fsSL -o /tmp/agave.tar.bz2 \
+      "https://github.com/anza-xyz/agave/releases/download/${AGAVE}/solana-release-x86_64-unknown-linux-gnu.tar.bz2" \
+ && echo "${AGAVE_SHA256}  /tmp/agave.tar.bz2" | sha256sum -c - \
+ && tar xjf /tmp/agave.tar.bz2 -C /usr/local/bin --strip-components=2 \
+      solana-release/bin/cargo-build-sbf solana-release/bin/solana \
+      solana-release/bin/solana-keygen \
+ && rm /tmp/agave.tar.bz2
+
+# platform-tools go to $HOME/.cache/solana and are linked into rustup as the
+# `solana` toolchain.
+ENV HOME=/root
+RUN cargo-build-sbf --install-only --tools-version "${PLATFORM_TOOLS}"
+
+RUN cargo install --locked --root /usr/local anchor-cli --version "${ANCHOR}" \
+ && cargo install --locked --root /usr/local trident-cli --version "${TRIDENT}" \
+ && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
+
+RUN rustup component add rustfmt clippy
+
+WORKDIR /work

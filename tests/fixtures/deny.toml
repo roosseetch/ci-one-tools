@@ -1,0 +1,4 @@
+# Advisory checks of the test fixtures. The database lives in the cargo
+# home volume, so repeated runs reuse it.
+[advisories]
+db-path = "/cargo/advisory-dbs"

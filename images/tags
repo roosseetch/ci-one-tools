@@ -1,0 +1,12 @@
+# Every tag an image has had, with the hash of its directory under images/
+# (bin/image-tags --hash NAME). Append a line for each new tag; never edit
+# or reuse one. The last line for an image is its current tag.
+# bin/check-image-tags fails when an image's directory changed without a new
+# tag, or when a tag names two hashes.
+#
+# image  tag  hash
+node 26.13.0-1 eb66d50b9675205393658a01f70ef2aa2802751d4df3b8ae515db64c50472035
+sbf 4.3.0-4 3527148bce6db820bfa0bb98e262ebdf8654721f0d93f2d3b9d65f1d6d7d0bd2
+audit 1.0.0 2eaca621058415032d08b3f14438f0329ca0a3567e80fc652d158c7880d3fc17
+web-test 26.13.0-1 55673061c2e7625281d517ac8ac7c5c85964917f7e93f2957b84cf72b5e4ef18
+rust 1.97.1-1 ecda5a753e97574cbd96602faef773ebd4a9d160edc84300a2d75229c7229fd4

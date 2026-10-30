@@ -1,0 +1,82 @@
+# Publishes each image under its current tag (bin/image-tags) to GHCR, once:
+# a tag that is already published is never pushed again, so a tag always
+# means the same image. Runs when main changes an image, and by hand.
+name: Images
+
+on:
+  push:
+    branches: [main]
+    paths: ["images/**", "bin/**", ".github/workflows/images.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # A manual run on another branch would publish unmerged images under
+    # tags that are never published again.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Image tags
+        env:
+          # The commit main had before this push; empty for a manual run.
+          BASE: ${{ github.event.before }}
+        run: bin/check-image-tags
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ github.token }}
+        run: printf '%s' "$TOKEN" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push new tags
+        run: |
+          echo "| Image | Digest |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          while read -r name tag; do
+            ref="$IMAGE_PREFIX/$name:$tag"
+            if skopeo inspect --raw "docker://$ref" >/dev/null 2> inspect.err; then
+              echo "$ref is published already"
+              echo "| \`$ref\` | published before |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            # Only a tag the registry says it lacks is built; any other error
+            # (the network, a rate limit) stops here rather than overwrite it.
+            # A package GHCR has never seen answers 403 (denied), so that
+            # counts only for an image's first tag: once a tag is published
+            # the package exists and a 403 is a real error.
+            missing='manifest unknown|name unknown|not found|404'
+            if [ "$(awk -v i="$name" '!/^#/ && $1 == i' images/tags | wc -l)" = 1 ]; then
+              missing="$missing|denied|403"
+            fi
+            if ! grep -qiE "$missing" inspect.err; then
+              cat inspect.err >&2
+              echo "::error::could not tell whether $ref is published"
+              exit 1
+            fi
+            # The sbf image needs more disk than the runner has free while
+            # its unused SDKs are installed.
+            if [ "$name" = sbf ]; then
+              sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+            fi
+            bin/build-image "$name"
+            podman push --digestfile digest "$ref"
+            echo "| \`$ref\` | \`$(cat digest)\` |" >> "$GITHUB_STEP_SUMMARY"
+            # Free the disk for the next build; web-test builds on node.
+            [ "$name" = node ] || podman rmi -f "$ref" >/dev/null
+          done < <(bin/image-tags)

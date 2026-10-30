@@ -1,0 +1,28 @@
+# Base images get version updates monthly, after a week's cooldown, so a
+# hijacked release is likely caught before it lands; security updates skip
+# the cooldown. A base-image bump needs a new tag in images/tags too
+# (bin/check-image-tags says what to append), pushed onto the PR's branch.
+version: 2
+
+updates:
+  - package-ecosystem: docker
+    directories: [/images/node, /images/sbf, /images/rust, /images/audit]
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+    ignore:
+      # Rust stays on the toolchain of the Agave release in images/sbf (and
+      # images/rust with it); new digests and patch releases still come.
+      - dependency-name: "library/rust"
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: "rust"
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      # Node follows the newest 26.x (LTS); a new major is its own PR.
+      - dependency-name: "library/node"
+        update-types: [version-update:semver-major]
+      - dependency-name: "node"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
