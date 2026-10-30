@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Build order: web-test builds on node.
-ORDER=(node sbf audit web-test)
+ORDER=(node sbf rust audit web-test)
 
 # hash <name>: SHA-256 over every file in images/<name>, paths included.
 hash() {

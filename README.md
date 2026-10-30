@@ -12,6 +12,7 @@ Published to GHCR as public packages. Pull them without logging in:
 | Image | What's in it |
 |---|---|
 | `ghcr.io/roosseetch/ci-one-tools/sbf` | Rust 1.97.1, Agave 4.3.0 (`cargo-build-sbf`, `solana`, `solana-keygen`), platform-tools v1.57, Anchor CLI 1.2.1, Trident CLI 0.12.0, rustfmt, clippy |
+| `ghcr.io/roosseetch/ci-one-tools/rust` | Rust 1.97.1 (slim Debian), pkg-config, rustfmt, clippy: the sbf toolchain without the Solana tools, for services and libraries |
 | `ghcr.io/roosseetch/ci-one-tools/node` | Node 26 (LTS, Alpine), Bun 1.4.3 |
 | `ghcr.io/roosseetch/ci-one-tools/web-test` | the node image plus Chromium, for Playwright |
 | `ghcr.io/roosseetch/ci-one-tools/audit` | cargo-deny 0.20.2, Bun 1.4.3, Trivy 0.76.1, and the `lockfile-audit` and `scan-images` scripts |

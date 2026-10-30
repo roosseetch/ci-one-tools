@@ -4,9 +4,13 @@
 # the hash of the directory it was built from (bin/image-tags --hash). This
 # fails when an image's directory has no line under its current tag, a tag
 # names two hashes, web-test does not build on the current node tag, or the
-# reusable security workflow does not run the current audit tag.
+# reusable security workflow does not run the current audit tag. With BASE
+# set to a commit, it also fails when a line images/tags had there was
+# changed or removed: the file is append-only, so a published tag keeps the
+# hash it was published with.
 #
 #   bin/check-image-tags
+#   BASE=origin/main bin/check-image-tags
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,6 +32,23 @@ done < <(bin/image-tags)
 # A tag names one directory state, ever.
 if dup="$(awk '!/^#/ && NF { k = $1 ":" $2; if (k in seen && seen[k] != $3) print k; seen[k] = $3 }' images/tags)" && [[ -n "$dup" ]]; then
   echo "check-image-tags: these tags name more than one hash in images/tags: $dup" >&2
+  rc=1
+fi
+
+if [[ -n "${BASE:-}" ]]; then
+  while read -r line; do
+    grep -qxF "$line" images/tags || {
+      echo "check-image-tags: images/tags lost or changed \"$line\" (it was there at $BASE); append a new tag instead" >&2
+      rc=1
+    }
+  done < <(git show "$BASE:images/tags" 2>/dev/null | grep -vE '^(#|$)')
+fi
+
+# The rust image is the sbf image's toolchain without the Solana tools, so
+# both keep the same Rust release: a shared target/ never rebuilds for it.
+rust_of() { sed -n 's|^FROM docker\.io/library/rust:\([0-9.]*\)-.*|\1|p' "images/$1/Containerfile" | sort -u; }
+if [[ "$(rust_of sbf)" != "$(rust_of rust)" ]]; then
+  echo "check-image-tags: images/rust has Rust $(rust_of rust), images/sbf has $(rust_of sbf); bump them together" >&2
   rc=1
 fi
 

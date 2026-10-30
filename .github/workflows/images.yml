@@ -18,6 +18,9 @@ concurrency:
 
 jobs:
   publish:
+    # A manual run on another branch would publish unmerged images under
+    # tags that are never published again.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -26,9 +29,15 @@ jobs:
     env:
       IMAGE_PREFIX: ghcr.io/${{ github.repository }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - run: bin/check-image-tags
+      - name: Image tags
+        env:
+          # The commit main had before this push; empty for a manual run.
+          BASE: ${{ github.event.before }}
+        run: bin/check-image-tags
 
       - name: Log in to GHCR
         env:
@@ -48,10 +57,14 @@ jobs:
             fi
             # Only a tag the registry says it lacks is built; any other error
             # (the network, a rate limit) stops here rather than overwrite it.
-            # A package GHCR has never seen answers 403 (denied): a token that
-            # can push can also read, so for a published tag that cannot
-            # happen.
-            if ! grep -qiE 'manifest unknown|name unknown|not found|404|denied|403' inspect.err; then
+            # A package GHCR has never seen answers 403 (denied), so that
+            # counts only for an image's first tag: once a tag is published
+            # the package exists and a 403 is a real error.
+            missing='manifest unknown|name unknown|not found|404'
+            if [ "$(awk -v i="$name" '!/^#/ && $1 == i' images/tags | wc -l)" = 1 ]; then
+              missing="$missing|denied|403"
+            fi
+            if ! grep -qiE "$missing" inspect.err; then
               cat inspect.err >&2
               echo "::error::could not tell whether $ref is published"
               exit 1

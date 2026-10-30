@@ -59,11 +59,16 @@ jobs:
     permissions:
       contents: read
       issues: write
+    # One run at a time per tracking issue, so two runs can't both find no
+    # issue and each open one.
+    concurrency:
+      group: security-issue-${{ github.repository }}-${{ inputs.issue-title }}
+      cancel-in-progress: false
     env:
       # The current audit tag; bin/check-image-tags keeps them in step.
       AUDIT_IMAGE: ghcr.io/roosseetch/ci-one-tools/audit:1.0.0
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Lockfiles, checks and images
         id: scan
@@ -82,8 +87,9 @@ jobs:
           # shellcheck disable=SC2086
           if [ "$LOCKFILES" = true ]; then run lockfile-audit $AUDIT_ARGS > audit.log 2>&1 || rc=1; fi
           : > checks.log
-          if [ -n "$CHECKS" ]; then bash -c "$CHECKS" > checks.log 2>&1 || rc=1; fi
-          { printf '%s\n' "$IMAGES"; if [ -n "$IMAGES_COMMAND" ]; then bash -c "$IMAGES_COMMAND"; fi; } > images.txt || rc=1
+          # errexit and pipefail, so a failure inside a pipeline is not lost.
+          if [ -n "$CHECKS" ]; then bash -e -o pipefail -c "$CHECKS" > checks.log 2>&1 || rc=1; fi
+          { printf '%s\n' "$IMAGES"; if [ -n "$IMAGES_COMMAND" ]; then bash -e -o pipefail -c "$IMAGES_COMMAND"; fi; } > images.txt || rc=1
           img=0
           if grep -qv '^[[:space:]]*$' images.txt; then
             run scan-images < images.txt > images.md || img=1

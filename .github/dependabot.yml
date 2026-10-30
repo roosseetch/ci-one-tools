@@ -6,12 +6,12 @@ version: 2
 
 updates:
   - package-ecosystem: docker
-    directories: [/images/node, /images/sbf, /images/audit]
+    directories: [/images/node, /images/sbf, /images/rust, /images/audit]
     schedule: { interval: monthly }
     cooldown: { default-days: 7 }
     ignore:
-      # Rust stays on the toolchain of the Agave release in images/sbf; new
-      # digests and patch releases still come.
+      # Rust stays on the toolchain of the Agave release in images/sbf (and
+      # images/rust with it); new digests and patch releases still come.
       - dependency-name: "library/rust"
         update-types: [version-update:semver-major, version-update:semver-minor]
       - dependency-name: "rust"
