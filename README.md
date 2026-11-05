@@ -84,6 +84,89 @@ network) is retried twice before that. Image findings only show up in the
 report and the issue, because upstream images gain findings without any
 change of yours.
 
+## Certifying a commit locally
+
+`lib/ci-tree.sh` runs a repository's CI on your own machine and posts the result
+as the `ci/local` commit status on GitHub. It runs the commit, not your working
+copy: the commit's own `scripts/ci` runs in a separate, persistent tree, so you
+can keep editing, and `target/` and `node_modules/` stay warm between runs. One
+run per tree at a time; a second one waits.
+
+It needs Linux, bash, git, Podman, `flock`, `setsid`, coreutils and a GitHub
+client with an `api` command, such as `gh`. On a filesystem with reflinks
+(btrfs, XFS), the first run seeds the tree's caches from your checkout instantly;
+elsewhere they are rebuilt.
+
+Copy both files from one commit of this repository into yours, and record that
+commit and the hashes, so a local edit does not go unnoticed:
+
+```text
+scripts/lib/ci-tree.sh    from lib/ci-tree.sh
+scripts/lib/ci-label.sh   from lib/ci-label.sh
+```
+
+Then start `scripts/ci` like this, keeping its work below the `if`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+CI_REPO="${CI_REPO:-owner/repository}"
+if [[ -n "${CI_GH:-}" ]]; then
+  CI_TREE_KEEP=(/target/ node_modules/)   # ignored paths kept between runs: caches only
+  CI_TREE_SEED=()                         # further ignored directories copied on first use
+  . scripts/lib/ci-tree.sh
+  ci_tree_run                             # never returns
+fi
+
+# The suite. It runs again from here, in the tree, with CI_GH unset.
+```
+
+Run it with `CI_GH=gh scripts/ci`. The commit must be on GitHub already. Without
+`CI_GH`, `scripts/ci` is just the suite, in place.
+
+Give everything the suite starts the run's label, so a run that dies can be
+cleaned up:
+
+```bash
+. scripts/lib/ci-label.sh
+podman run "${CI_LABEL[@]}" ...
+podman network create "${CI_LABEL[@]}" ...
+podman volume create "${CI_LABEL[@]}" ...
+```
+
+| Setting | What it does | Default |
+|---|---|---|
+| `CI_GH` | GitHub client; a command, or a path relative to the repository | none: no certification |
+| `CI_REPO` | `owner/name` the status goes to | set by `scripts/ci` |
+| `CI_SHA` | commit to test | `HEAD` |
+| `CI_TREE` | the tree | `~/.cache/ci-local/<name>` |
+| `CI_TREE_STOP_SECONDS` | how long the suite gets between TERM and KILL | 30 |
+
+### When a run does not finish
+
+Each run keeps a record in `<tree>.run` until its cleanup is verified. If the
+launcher dies, the next run retries the cleanup and carries on when the old
+process group is gone and everything labelled with the old run's id is removed.
+
+The tree stays quarantined, and runs exit 2 without doing anything, when that
+cannot be established:
+
+- the old suite is still running;
+- labelled resources could not be removed;
+- the record cannot be read, or another version of this library wrote it;
+- the run tested a commit whose `scripts/lib/ci-label.sh` is missing or uses
+  another label, and did not finish normally, so its containers cannot be found.
+
+To clear it, look for leftovers with `podman ps -a --filter label=ci-tree.run`
+(and the label of any older version you used), remove what is left, and delete
+`<tree>.run`.
+
+Keep the launcher at least as new as the commit you test: an older copy of the
+library, started with `CI_SHA` set to a newer commit, looks for the older label
+and finds nothing.
+
 ## This repository
 
 - `bin/build-image NAME` builds an image under its current tag.
@@ -91,6 +174,9 @@ change of yours.
   every pull request.
 - `tests/audit.sh IMAGE` checks the audit image against fixtures with known
   results.
+- `tests/ci-tree.sh` checks the CI tree library with real git, locks and signals
+  and a fake Podman. `tests/ci-tree-podman.sh` checks what only real Podman can
+  show, and pulls a small image to do it.
 - Workflows: **CI** checks pull requests and builds the images they change.
   **Images** publishes new tags from `main`. **Image scan** runs Trivy daily
   over the published images and keeps an "Image scan findings" issue.

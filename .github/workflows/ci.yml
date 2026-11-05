@@ -1,7 +1,7 @@
-# Pull requests: tags match the image directories, the scripts parse, and
-# every image whose directory changed builds; the audit image also runs its
-# own checks against this repository's fixtures. Publishing is images.yml,
-# after the merge.
+# Pull requests: tags match the image directories, the scripts parse, the CI
+# tree library passes its tests, and every image whose directory changed
+# builds; the audit image also runs its own checks against this repository's
+# fixtures. Publishing is images.yml, after the merge.
 name: CI
 
 on:
@@ -30,7 +30,12 @@ jobs:
         run: bin/check-image-tags
 
       - name: Scripts parse
-        run: for f in bin/* images/audit/lockfile-audit images/audit/scan-images; do bash -n "$f"; done
+        run: for f in bin/* lib/* tests/*.sh images/audit/lockfile-audit images/audit/scan-images; do bash -n "$f"; done
+
+      - name: CI tree library
+        run: |
+          tests/ci-tree.sh
+          tests/ci-tree-podman.sh
 
       - name: Build changed images
         env:
