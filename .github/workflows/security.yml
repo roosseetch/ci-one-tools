@@ -16,6 +16,7 @@
 #       uses: roosseetch/ci-one-tools/.github/workflows/security.yml@<commit sha>
 #       with:
 #         audit-args: --deny-config deny.toml .
+#         bun-ignore-file: audit/bun-ignore.txt
 #         images-command: ./scripts/list-images
 #
 # The issue is updated while findings remain and closed by a clean run; on a
@@ -33,6 +34,13 @@ on:
         description: Arguments of lockfile-audit (options, then directories)
         type: string
         default: "."
+      bun-ignore-file:
+        description: >-
+          A file in the repository of advisories bun audit may report without failing, the one
+          list for this workflow and your local check. One per line: the GHSA id, then anything;
+          blank lines and # comments are skipped. Empty means none
+        type: string
+        default: ""
       images:
         description: Images to scan, one per line
         type: string
@@ -77,6 +85,7 @@ jobs:
         env:
           LOCKFILES: ${{ inputs.lockfiles }}
           AUDIT_ARGS: ${{ inputs.audit-args }}
+          BUN_IGNORE_FILE: ${{ inputs.bun-ignore-file }}
           IMAGES: ${{ inputs.images }}
           IMAGES_COMMAND: ${{ inputs.images-command }}
           CHECKS: ${{ inputs.checks }}
@@ -85,9 +94,31 @@ jobs:
           run() { podman run --rm -i --security-opt label=disable -v cargo-home:/cargo -e CARGO_HOME=/cargo \
             -v trivy-cache:/root/.cache/trivy -v "$PWD:/work" -w /work "$AUDIT_IMAGE" "$@"; }
           rc=0
+          : > audit.log
+          # bun-ignore-file reader: begin
+          # A list that can't be trusted fails the run, reported with the audit;
+          # the id check also keeps a line from passing as another option.
+          bun_ignores=()
+          if [ "$LOCKFILES" = true ] && [ -n "$BUN_IGNORE_FILE" ]; then
+            if [ -f "$BUN_IGNORE_FILE" ] && [ -r "$BUN_IGNORE_FILE" ]; then
+              while read -r id _ || [ -n "$id" ]; do
+                case "$id" in '' | '#'*) continue ;; esac
+                if [[ "$id" =~ ^GHSA(-[2-9cfghjmpqrvwx]{4}){3}$ ]]; then
+                  bun_ignores+=(--bun-ignore "$id")
+                else
+                  echo "bun-ignore-file: not a GHSA id: $id" >> audit.log
+                  rc=1
+                fi
+              done < "$BUN_IGNORE_FILE"
+            else
+              echo "bun-ignore-file: can't read $BUN_IGNORE_FILE" >> audit.log
+              rc=1
+            fi
+          fi
+          # bun-ignore-file reader: end
           # Word splitting is intended: AUDIT_ARGS is an argument list.
           # shellcheck disable=SC2086
-          if [ "$LOCKFILES" = true ]; then run lockfile-audit $AUDIT_ARGS > audit.log 2>&1 || rc=1; fi
+          if [ "$LOCKFILES" = true ]; then run lockfile-audit "${bun_ignores[@]}" $AUDIT_ARGS >> audit.log 2>&1 || rc=1; fi
           : > checks.log
           # errexit and pipefail, so a failure inside a pipeline is not lost.
           if [ -n "$CHECKS" ]; then bash -e -o pipefail -c "$CHECKS" > checks.log 2>&1 || rc=1; fi
