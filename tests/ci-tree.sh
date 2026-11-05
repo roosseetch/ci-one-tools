@@ -130,6 +130,8 @@ eq "other ignored files do not" "$(cat "$CASE/other-seen")" no
 new_repo <<<'echo "$PWD" >"$CASE/pwd"'
 run_ci CI_TREE= XDG_CACHE_HOME="$CASE/cache"
 eq "the default tree is under ci-local, by repository name" "$(cat "$CASE/pwd")" "$(realpath "$CASE/cache/ci-local/example")"
+run_ci CI_TREE=
+eq "without CI_TREE, a test's tree still stays in its own directory" "$(cat "$CASE/pwd")" "$(realpath "$work/cache/ci-local/example")"
 
 new_repo <<<':'
 mkdir -p "$tree"

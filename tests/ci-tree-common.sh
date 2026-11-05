@@ -8,6 +8,8 @@ work="$(mktemp -d)"
 n=0 fails=0 count=0 launcher='' rc=0 case_dir='' repo='' tree=''
 launchers=() started_cases=()
 
+# A launcher that loses CI_TREE falls back to the default tree: keep that here too.
+export XDG_CACHE_HOME="$work/cache"
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
 export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
