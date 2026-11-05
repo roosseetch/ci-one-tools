@@ -10,6 +10,7 @@
 # - cargo-deny 0.20.2, Bun 1.4.3 and Trivy 0.76.1, each from its release
 #   archive, pinned by the SHA-256 the release publishes.
 # Bump them together, and add a new tag for this image to images/tags.
+# Rebuilt 2026-11-05 for Debian's fixes.
 # Both stages start from the same pinned base.
 FROM docker.io/library/rust:1.97.1-slim-trixie@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c AS fetch
 ARG DENY=0.20.2

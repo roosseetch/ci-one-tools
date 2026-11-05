@@ -9,6 +9,7 @@
 #   library headers for build scripts.
 # - pkg-config, rustfmt and clippy.
 # Bump them together, and add a new tag for this image to images/tags.
+# Rebuilt 2026-11-05 for Debian's fixes.
 FROM docker.io/library/rust:1.97.1-slim-trixie@sha256:8e8cf8f7fd54a2d23d5a743b3a03f56e26b6c774276c33fa0595111704ebb15c
 # Debian's security fixes, whether or not upstream has rebuilt the pinned
 # base yet.
