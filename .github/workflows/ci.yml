@@ -1,5 +1,5 @@
-# Pull requests: tags match the image directories, the scripts parse, the CI
-# tree library passes its tests, and every image whose directory changed
+# Pull requests: tags match the image directories, the scripts parse, the
+# security workflow reads its ignore list, the CI tree library passes its tests, and every image whose directory changed
 # builds; the audit image also runs its own checks against this repository's
 # fixtures. Publishing is images.yml, after the merge.
 name: CI
@@ -31,6 +31,9 @@ jobs:
 
       - name: Scripts parse
         run: for f in bin/* lib/* tests/*.sh images/audit/lockfile-audit images/audit/scan-images; do bash -n "$f"; done
+
+      - name: Security workflow
+        run: tests/security-workflow.sh
 
       - name: CI tree library
         run: |

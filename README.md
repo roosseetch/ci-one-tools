@@ -72,11 +72,17 @@ jobs:
     uses: roosseetch/ci-one-tools/.github/workflows/security.yml@<commit sha>
     with:
       audit-args: --deny-config deny.toml .
+      bun-ignore-file: audit/bun-ignore.txt   # optional: advisories bun audit may report
       images: |
         docker.io/library/postgres:18.6
       images-command: ./scripts/list-images   # optional: more images, one per line
       checks: ./scripts/check-something       # optional: fails the run like a lockfile finding
 ```
+
+`bun-ignore-file` holds the accepted advisories, so your local check can read
+the same list. One per line: the GHSA id, then anything, such as the reason.
+Blank lines and `#` comments are skipped. A file it can't read, or a line that
+doesn't start with a GHSA id, fails the run.
 
 Lockfile findings, failed checks and images that could not be scanned
 fail the run. An image that fails to scan (a registry rate limit, the
@@ -174,6 +180,8 @@ and finds nothing.
   every pull request.
 - `tests/audit.sh IMAGE` checks the audit image against fixtures with known
   results.
+- `tests/security-workflow.sh` runs the reusable workflow's `bun-ignore-file`
+  reader, taken from the workflow itself, against good and bad lists.
 - `tests/ci-tree.sh` checks the CI tree library with real git, locks and signals
   and a fake Podman. `tests/ci-tree-podman.sh` checks what only real Podman can
   show, and pulls a small image to do it.
