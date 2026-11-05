@@ -21,7 +21,12 @@ check() { # <description> <want rc> <want ignores> <want in audit.log> [LOCKFILE
     : > audit.log
     . ./reader.sh
     echo "rc=$rc ignores=${bun_ignores[*]:-}"')" || out="the reader stopped the step"
-  if [[ "$out" == "rc=$want_rc ignores=$want_ids" ]] && { [[ -z $want_log ]] && [[ ! -s $work/audit.log ]] || grep -qF -- "$want_log" "$work/audit.log"; }; then
+  if [[ -n $want_log ]]; then
+    grep -qF -- "$want_log" "$work/audit.log" || out="$out, and no such line in the log: $want_log"
+  elif [[ -s $work/audit.log ]]; then
+    out="$out, and an unexpected log"
+  fi
+  if [[ "$out" == "rc=$want_rc ignores=$want_ids" ]]; then
     echo "ok: $what"
   else
     echo "FAILED: $what"
@@ -51,6 +56,9 @@ check "a line that would be an option fails" 1 "--bun-ignore $a" 'not a GHSA id:
 
 printf 'ghsa-3gc7-fjrx-p6mg\n' > "$work/list"
 check "a lowercase id fails" 1 '' 'not a GHSA id'
+
+printf 'GHSA-0000-aaaa-1111\n' > "$work/list"
+check "letters outside GitHub's alphabet fail" 1 '' 'not a GHSA id'
 
 printf 'GHSA-3gc7-fjrx\n' > "$work/list"
 check "a short id fails" 1 '' 'not a GHSA id'

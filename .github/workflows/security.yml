@@ -103,7 +103,7 @@ jobs:
             if [ -f "$BUN_IGNORE_FILE" ] && [ -r "$BUN_IGNORE_FILE" ]; then
               while read -r id _ || [ -n "$id" ]; do
                 case "$id" in '' | '#'*) continue ;; esac
-                if [[ "$id" =~ ^GHSA(-[0-9a-z]{4}){3}$ ]]; then
+                if [[ "$id" =~ ^GHSA(-[2-9cfghjmpqrvwx]{4}){3}$ ]]; then
                   bun_ignores+=(--bun-ignore "$id")
                 else
                   echo "bun-ignore-file: not a GHSA id: $id" >> audit.log

@@ -82,7 +82,7 @@ jobs:
 `bun-ignore-file` holds the accepted advisories, so your local check can read
 the same list. One per line: the GHSA id, then anything, such as the reason.
 Blank lines and `#` comments are skipped. A file it can't read, or a line that
-doesn't start with a GHSA id, fails the run.
+doesn't start with a well-formed GHSA id, fails the run.
 
 Lockfile findings, failed checks and images that could not be scanned
 fail the run. An image that fails to scan (a registry rate limit, the
