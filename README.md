@@ -27,7 +27,12 @@ Images workflow lists the digest of each new tag.
 Tags are `<main upstream version>-<revision>`. For the audit image, which
 bundles several tools, they are semantic versions. Any change under
 `images/NAME` needs a new tag: append `NAME <tag> <hash>` to `images/tags`.
-`bin/check-image-tags` prints the line to add. A rebuild with no other change
+`bin/check-image-tags` prints the line to add. The reusable workflow pins the
+audit image by digest, which exists only once the tag is published, so a new
+audit tag takes two changes: the tag, then the pin; the check allows the
+workflow to run the tag before the current one meanwhile.
+
+A rebuild with no other change
 (to take Debian's or Alpine's fixes) is a new revision too: change a comment
 in the Containerfile and add the tag.
 
@@ -180,6 +185,8 @@ and finds nothing.
   every pull request.
 - `tests/audit.sh IMAGE` checks the audit image against fixtures with known
   results.
+- `tests/check-image-tags.sh` runs `bin/check-image-tags` on a copy of the tree,
+  with the workflow's audit tag current, one behind, two behind and unpinned.
 - `tests/security-workflow.sh` runs the reusable workflow's `bun-ignore-file`
   reader, taken from the workflow itself, against good and bad lists.
 - `tests/ci-tree.sh` checks the CI tree library with real git, locks and signals

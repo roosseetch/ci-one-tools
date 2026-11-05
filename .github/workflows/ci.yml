@@ -32,6 +32,9 @@ jobs:
       - name: Scripts parse
         run: for f in bin/* lib/* tests/*.sh images/audit/lockfile-audit images/audit/scan-images; do bash -n "$f"; done
 
+      - name: Image tag checks
+        run: tests/check-image-tags.sh
+
       - name: Security workflow
         run: tests/security-workflow.sh
 
