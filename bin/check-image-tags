@@ -61,8 +61,8 @@ if [[ "$parent" != "$node" ]]; then
 fi
 audit="$(bin/image-tags audit)"
 used="$(sed -n 's|^ *AUDIT_IMAGE: .*/audit:\([^@]*\).*$|\1|p' .github/workflows/security.yml)"
-if ! grep -qE '^ *AUDIT_IMAGE: .*/audit:[^@]+@sha256:[0-9a-f]{64}$' .github/workflows/security.yml; then
-  echo "check-image-tags: .github/workflows/security.yml must pin AUDIT_IMAGE by digest (tag@sha256:...)" >&2
+if ! grep -qE '^ *AUDIT_IMAGE: ghcr\.io/roosseetch/ci-one-tools/audit:[^@]+@sha256:[0-9a-f]{64}$' .github/workflows/security.yml; then
+  echo "check-image-tags: .github/workflows/security.yml must pin AUDIT_IMAGE to this repository's audit image by digest (tag@sha256:...)" >&2
   rc=1
 fi
 # A tag is published after it merges, and the workflow pins the digest that

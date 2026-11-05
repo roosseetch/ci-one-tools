@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs bin/check-image-tags on a copy of the tree, with the reusable workflow's
-# audit tag current, one behind, two behind and unpinned.
+# audit tag current, one behind, two behind, from another repository and unpinned.
 #
 #   tests/check-image-tags.sh
 set -euo pipefail
@@ -39,6 +39,9 @@ expect pass "the tag before it"
 use "$current"
 expect fail "two tags behind"
 use test.2
+sed -i 's|ghcr.io/roosseetch/ci-one-tools/audit:|ghcr.io/unrelated/repo/audit:|' "$workflow"
+expect fail "another repository's audit image"
+sed -i 's|ghcr.io/unrelated/repo/audit:|ghcr.io/roosseetch/ci-one-tools/audit:|' "$workflow"
 sed -i 's|\(AUDIT_IMAGE: .*/audit:[^@]*\)@sha256:[0-9a-f]*|\1|' "$workflow"
 expect fail "a tag without a digest"
 exit "$fail"
