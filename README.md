@@ -43,7 +43,7 @@ in the Containerfile and add the tag.
 
 ```bash
 podman run --rm -v "$PWD:/work" -w /work -v cargo-home:/cargo -e CARGO_HOME=/cargo \
-  ghcr.io/roosseetch/ci-one-tools/audit:1.0.0 \
+  ghcr.io/roosseetch/ci-one-tools/audit:1.0.1 \
   lockfile-audit --deny-config deny.toml . frontend
 ```
 
@@ -57,7 +57,7 @@ non-zero:
 
 ```bash
 printf '%s\n' docker.io/library/postgres:18.6 | podman run --rm -i \
-  ghcr.io/roosseetch/ci-one-tools/audit:1.0.0 scan-images
+  ghcr.io/roosseetch/ci-one-tools/audit:1.0.1 scan-images
 ```
 
 ### The reusable workflow
