@@ -42,7 +42,7 @@ in the Containerfile and add the tag.
 `bun audit` wherever a `bun.lock` is:
 
 ```bash
-podman run --rm -v "$PWD:/work" -w /work -v cargo-home:/cargo -e CARGO_HOME=/cargo \
+podman run --rm --log-driver=none -v "$PWD:/work" -w /work -v cargo-home:/cargo -e CARGO_HOME=/cargo \
   ghcr.io/roosseetch/ci-one-tools/audit:1.0.1 \
   lockfile-audit --deny-config deny.toml . frontend
 ```
@@ -56,7 +56,7 @@ a fixable CRITICAL finding, or an image it could not scan, makes it exit
 non-zero:
 
 ```bash
-printf '%s\n' docker.io/library/postgres:18.6 | podman run --rm -i \
+printf '%s\n' docker.io/library/postgres:18.6 | podman run --rm --log-driver=none -i \
   ghcr.io/roosseetch/ci-one-tools/audit:1.0.1 scan-images
 ```
 
@@ -94,6 +94,21 @@ fail the run. An image that fails to scan (a registry rate limit, the
 network) is retried twice before that. Image findings only show up in the
 report and the issue, because upstream images gain findings without any
 change of yours.
+
+### Containers that keep no log
+
+`lib/check-one-shot-logs.sh` holds a repository's tracked files to one rule. A
+one-shot container starts `podman run --rm --log-driver=none`, with
+`"${CI_LABEL[@]}"` first if it has the label, so Podman stores none of its
+output, which can hold a secret, whatever the machine's configuration. The
+output still goes to the caller. A service (`podman run -d`) keeps its log, for
+`podman logs`, and has no `--rm`.
+
+Copy the file anywhere into your repository, keeping it executable, record the
+commit and hash as for the CI tree library below, and run it from CI. It needs
+bash and git, exits 1 on a launch that breaks the rule, and exits 2 if it can't
+do the check. Markdown is skipped, and a launch built at runtime or through a
+variable is not seen.
 
 ## Certifying a commit locally
 
@@ -142,7 +157,7 @@ cleaned up:
 
 ```bash
 . scripts/lib/ci-label.sh
-podman run "${CI_LABEL[@]}" ...
+podman run "${CI_LABEL[@]}" --rm --log-driver=none ...
 podman network create "${CI_LABEL[@]}" ...
 podman volume create "${CI_LABEL[@]}" ...
 ```
@@ -189,6 +204,8 @@ and finds nothing.
   with the workflow's audit tag current, one behind, two behind and unpinned.
 - `tests/security-workflow.sh` runs the reusable workflow's `bun-ignore-file`
   reader, taken from the workflow itself, against good and bad lists.
+- `lib/check-one-shot-logs.sh` runs on this repository, and
+  `tests/check-one-shot-logs.sh` runs it on throwaway repositories.
 - `tests/ci-tree.sh` checks the CI tree library with real git, locks and signals
   and a fake Podman. `tests/ci-tree-podman.sh` checks what only real Podman can
   show, and pulls a small image to do it.

@@ -1,4 +1,4 @@
-# Pull requests: tags match the image directories, the scripts parse, the
+# Pull requests: one-shot containers keep no log, tags match the image directories, the scripts parse, the
 # security workflow reads its ignore list, the CI tree library passes its tests, and every image whose directory changed
 # builds; the audit image also runs its own checks against this repository's
 # fixtures. Publishing is images.yml, after the merge.
@@ -23,6 +23,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: One-shot containers keep no log
+        run: |
+          lib/check-one-shot-logs.sh
+          tests/check-one-shot-logs.sh
 
       - name: Image tags
         env:

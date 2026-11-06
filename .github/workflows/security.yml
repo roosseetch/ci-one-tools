@@ -91,7 +91,7 @@ jobs:
           CHECKS: ${{ inputs.checks }}
         run: |
           podman pull -q "$AUDIT_IMAGE" >/dev/null
-          run() { podman run --rm -i --security-opt label=disable -v cargo-home:/cargo -e CARGO_HOME=/cargo \
+          run() { podman run --rm --log-driver=none -i --security-opt label=disable -v cargo-home:/cargo -e CARGO_HOME=/cargo \
             -v trivy-cache:/root/.cache/trivy -v "$PWD:/work" -w /work "$AUDIT_IMAGE" "$@"; }
           rc=0
           : > audit.log

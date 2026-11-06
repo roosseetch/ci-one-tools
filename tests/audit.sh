@@ -14,7 +14,7 @@ trap 'rm -rf "$work"' EXIT
 cp -r tests/fixtures/. "$work"
 
 run() {
-  podman run --rm -i --security-opt label=disable -v ci-one-tools-cargo:/cargo -e CARGO_HOME=/cargo \
+  podman run --rm --log-driver=none -i --security-opt label=disable -v ci-one-tools-cargo:/cargo -e CARGO_HOME=/cargo \
     -v ci-one-tools-trivy:/root/.cache/trivy -v "$work:/work" -w /work "$image" "$@"
 }
 fail=0
