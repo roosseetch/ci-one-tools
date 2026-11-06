@@ -31,7 +31,7 @@ START='. scripts/lib/ci-label.sh
 name="ci-tree-test-$TEST_ID-${CI_RUN_ID:0:8}"
 podman volume create "${CI_LABEL[@]}" --label "ci-tree-test=$TEST_ID" "$name-v" >/dev/null
 podman network create "${CI_LABEL[@]}" --label "ci-tree-test=$TEST_ID" "$name-n" >/dev/null
-podman run -d --log-driver=none "${CI_LABEL[@]}" --label "ci-tree-test=$TEST_ID" --name "$name-c" \
+podman run -d "${CI_LABEL[@]}" --label "ci-tree-test=$TEST_ID" --name "$name-c" \
   --network "$name-n" -v "$name-v:/data" "$IMAGE" sleep 300 >/dev/null
 echo "$name" >"$CASE/name"
 '
